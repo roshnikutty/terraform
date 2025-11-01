@@ -1,0 +1,5 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and fill in your actual values
+
+access_key = "placeholder"
+secret_key = "placeholder"
