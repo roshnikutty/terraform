@@ -1,0 +1,113 @@
+name: Apply to Main
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TF_VAR_snowflake_user: ${{ secrets.SNOWFLAKE_USER }}
+  TF_VAR_snowflake_password: ${{ secrets.SNOWFLAKE_PASSWORD }}
+  TF_VAR_snowflake_organization_name: ${{ secrets.SNOWFLAKE_ORGANIZATION_NAME }}
+  TF_VAR_snowflake_account_name: ${{ secrets.SNOWFLAKE_ACCOUNT_NAME }}
+  TF_VAR_snowflake_role: ${{ secrets.SNOWFLAKE_ROLE }}
+  #AWS creds with IAM pernmissions to create roles/policies
+  TF_VAR_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  TF_VAR_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_REGION: us-east-1
+
+jobs:
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.4
+
+      - name: Terraform format
+        id: fmt
+        run: |
+          echo "Running terraform fmt"
+          terraform fmt -check -recursive
+        working-directory: ./terraform
+
+      - name: Terraform Init
+        id: init
+        run: |
+          echo "Running terraform init"
+          terraform init
+        working-directory: ./terraform
+
+      - name: Terraform validate
+        id: validate
+        run: |
+          echo "Running terraform validate"
+          terraform validate
+        working-directory: ./terraform
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          echo "Running terraform plan"
+          terraform plan -var-file="dev.tfvars" -out=tfplan
+          echo "Terraform plan summary:"
+          terraform show -no-color tfplan | sed 's/\(private_key\|aws_key_id\|aws_secret_key\|password\|secret\|token\)[[:space:]]*=[[:space:]]*".*"/\1 = "***REDACTED***"/g'
+        working-directory: ./terraform
+
+      - name: upload Terraform plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ./terraform/tfplan
+  
+  apply:
+    name: Terraform Apply
+    needs: plan
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_snowflake_user: ${{ secrets.SNOWFLAKE_USER }}
+      TF_VAR_snowflake_password: ${{ secrets.SNOWFLAKE_PASSWORD }}
+      TF_VAR_snowflake_organization_name: ${{ secrets.SNOWFLAKE_ORGANIZATION_NAME }}
+      TF_VAR_snowflake_account_name: ${{ secrets.SNOWFLAKE_ACCOUNT_NAME }}
+      TF_VAR_snowflake_role: ${{ secrets.SNOWFLAKE_ROLE }}
+      #AWS creds with IAM pernmissions to create roles/policies
+      TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-east-1
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.4
+
+      - name: Terraform Init
+        id: init
+        run: |
+          echo "Running terraform init"
+          terraform init
+        working-directory: ./terraform
+
+      - name: download Terraform plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ./terraform
+
+      - name: Terraform Apply
+        id: apply
+        run: |
+          echo "Running terraform apply"
+          terraform apply -auto-approve tfplan
+        working-directory: ./terraform
