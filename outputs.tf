@@ -19,7 +19,7 @@ output "snowflake_external_id" {
 
 output "iam_role_arn" {
   description = "ARN of the IAM role that Snowflake will assume"
-  value       = aws_iam_role.snowflake_ingest_role.arn
+  value       = local.iam_role_arn
 }
 
 output "desc_integration_command" {

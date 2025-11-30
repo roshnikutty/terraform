@@ -130,8 +130,15 @@ resource "snowflake_pipe" "s3_pipe" {
 }
 
 
+# Data source to reference existing IAM role if it exists
+data "aws_iam_role" "existing_role" {
+  count = var.create_iam_role ? 0 : 1
+  name  = "snowflake-snowpipe-role-dev"
+}
+
 resource "aws_iam_role" "snowflake_ingest_role" {
-  name = "snowflake-snowpipe-role-${var.environment}"
+  count = var.create_iam_role ? 1 : 0
+  name  = "snowflake-snowpipe-role-dev"
 
   # Initial placeholder trust policy - will be updated by aws_iam_role_policy_attachment below
   assume_role_policy = jsonencode({
@@ -152,18 +159,24 @@ resource "aws_iam_role" "snowflake_ingest_role" {
   }
 }
 
+locals {
+  iam_role_name = var.create_iam_role ? aws_iam_role.snowflake_ingest_role[0].name : data.aws_iam_role.existing_role[0].name
+  iam_role_arn  = var.create_iam_role ? aws_iam_role.snowflake_ingest_role[0].arn : data.aws_iam_role.existing_role[0].arn
+  iam_role_id   = var.create_iam_role ? aws_iam_role.snowflake_ingest_role[0].id : data.aws_iam_role.existing_role[0].id
+}
+
 # Update the IAM role trust policy after storage integration is created
 resource "null_resource" "update_trust_policy" {
   triggers = {
     integration_arn = snowflake_storage_integration.s3_integration.storage_aws_iam_user_arn
-    role_name       = aws_iam_role.snowflake_ingest_role.name
+    role_name       = local.iam_role_name
   }
 
   provisioner "local-exec" {
     command = <<-EOT
       AWS_ACCESS_KEY_ID=${var.aws_access_key} AWS_SECRET_ACCESS_KEY=${var.aws_secret_key} \
       aws iam update-assume-role-policy \
-        --role-name ${aws_iam_role.snowflake_ingest_role.name} \
+        --role-name ${local.iam_role_name} \
         --region us-east-1 \
         --policy-document '{
           "Version": "2012-10-17",
@@ -179,15 +192,14 @@ resource "null_resource" "update_trust_policy" {
   }
 
   depends_on = [
-    aws_iam_role.snowflake_ingest_role,
     snowflake_storage_integration.s3_integration
   ]
 }
 
 # IAM Policy granting S3 read permissions
 resource "aws_iam_role_policy" "snowflake_ingest_policy" {
-  name = "snowflake-snowpipe-policy-${var.environment}"
-  role = aws_iam_role.snowflake_ingest_role.id
+  name = "snowflake-snowpipe-policy"
+  role = local.iam_role_id
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -202,6 +214,10 @@ resource "aws_iam_role_policy" "snowflake_ingest_policy" {
       Resource = ["arn:aws:s3:::${var.s3_bucket_name}",
     "arn:aws:s3:::${var.s3_bucket_name}/${replace(var.s3_prefix, "/$", "")}*"] }]
   })
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # Snowflake Storage Integration
@@ -211,10 +227,8 @@ resource "snowflake_storage_integration" "s3_integration" {
   enabled                   = true
   storage_provider          = "S3"
   storage_allowed_locations = ["s3://${var.s3_bucket_name}/${var.s3_prefix}"]
-  storage_aws_role_arn      = aws_iam_role.snowflake_ingest_role.arn
+  storage_aws_role_arn      = local.iam_role_arn
   comment                   = "Storage integration for Snowpipe auto-ingest from S3"
-
-  depends_on = [aws_iam_role.snowflake_ingest_role]
 
   lifecycle {
     ignore_changes = all
