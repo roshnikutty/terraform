@@ -133,7 +133,7 @@ resource "snowflake_pipe" "s3_pipe" {
 
 
 resource "aws_iam_role" "snowflake_ingest_role" {
-  name  = "snowflake-snowpipe-role-dev"
+  name = "snowflake-snowpipe-role-dev"
 
   # Initial placeholder trust policy - will be updated by null_resource below
   assume_role_policy = jsonencode({
