@@ -163,6 +163,7 @@ resource "null_resource" "update_trust_policy" {
 
   provisioner "local-exec" {
     command = <<-EOT
+      echo "Updating IAM role trust policy with Snowflake IAM user: ${snowflake_storage_integration.s3_integration.storage_aws_iam_user_arn}"
       AWS_ACCESS_KEY_ID=${var.aws_access_key} AWS_SECRET_ACCESS_KEY=${var.aws_secret_key} \
       aws iam update-assume-role-policy \
         --role-name ${aws_iam_role.snowflake_ingest_role.name} \
@@ -174,9 +175,15 @@ resource "null_resource" "update_trust_policy" {
             "Principal": {
               "AWS": "${snowflake_storage_integration.s3_integration.storage_aws_iam_user_arn}"
             },
-            "Action": "sts:AssumeRole"
+            "Action": "sts:AssumeRole",
+            "Condition": {
+              "StringEquals": {
+                "sts:ExternalId": "${snowflake_storage_integration.s3_integration.storage_aws_external_id}"
+              }
+            }
           }]
         }'
+      echo "Trust policy updated successfully"
     EOT
   }
 
