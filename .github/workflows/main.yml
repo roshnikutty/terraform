@@ -35,6 +35,13 @@ jobs:
         with:
           terraform_version: 1.13.4
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
       - name: Terraform format
         id: fmt
         run: |
@@ -53,7 +60,7 @@ jobs:
           echo "Running terraform validate"
           terraform validate
 
-      - name: Import existing resources
+      - name: Import existing resources (first run only)
         id: import
         continue-on-error: true
         run: |
@@ -75,21 +82,7 @@ jobs:
         id: plan
         run: |
           echo "Running terraform plan"
-          terraform plan -var-file="dev.tfvars" -out=tfplan
-          echo "Terraform plan summary:"
-          terraform show -no-color tfplan | sed 's/\(private_key\|aws_key_id\|aws_secret_key\|password\|secret\|token\)[[:space:]]*=[[:space:]]*".*"/\1 = "***REDACTED***"/g'
-
-      - name: upload Terraform plan artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan
-          path: tfplan
-
-      - name: upload Terraform state
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-state
-          path: terraform.tfstate
+          terraform plan -var-file="dev.tfvars"
   
   apply:
     name: Terraform Apply
@@ -116,26 +109,21 @@ jobs:
         with:
           terraform_version: 1.13.4
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
       - name: Terraform Init
         id: init
         run: |
           echo "Running terraform init"
           terraform init
 
-      - name: download Terraform state
-        uses: actions/download-artifact@v4
-        with:
-          name: terraform-state
-          path: .
-
-      - name: download Terraform plan artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan
-          path: .
-
       - name: Terraform Apply
         id: apply
         run: |
           echo "Running terraform apply"
-          terraform apply -auto-approve tfplan
+          terraform apply -var-file="dev.tfvars" -auto-approve
