@@ -16,8 +16,8 @@ env:
   TF_VAR_snowflake_account_name: ${{ secrets.SNOWFLAKE_ACCOUNT_NAME }}
   TF_VAR_snowflake_role: ${{ secrets.SNOWFLAKE_ROLE }}
   #AWS creds with IAM pernmissions to create roles/policies
-  TF_VAR_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  TF_VAR_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION: us-east-1
 
 jobs:
