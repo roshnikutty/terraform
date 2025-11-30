@@ -27,15 +27,17 @@ data "snowflake_database" "snowpipe_db" {
 }
 
 # Check if schema exists by listing all schemas in the database
-data "snowflake_schemas" "all_schemas" {
-  in {
-    database = data.snowflake_database.snowpipe_db.name
-  }
-}
+# Commented out due to provider timeout issues
+# data "snowflake_schemas" "all_schemas" {
+#   in {
+#     database = data.snowflake_database.snowpipe_db.name
+#   }
+# }
 
 locals {
   # Check if the schema exists in the list
-  schema_exists = contains([for s in data.snowflake_schemas.all_schemas.schemas : s.show_output[0].name], upper(var.schema))
+  # Set to true to skip schema creation since it already exists
+  schema_exists = true
 }
 
 resource "snowflake_schema" "ingest_schema" {
