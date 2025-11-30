@@ -88,21 +88,21 @@ variable "table_name" {
 }
 
 variable "pipe_name" {
-  description = "Name for the Snowpipe (defaults to s3_pipe_<env>)"
+  description = "Name for the Snowpipe (defaults to s3_pipe)"
   type        = string
   default     = ""
 }
 
 variable "file_format_name" {
-  description = "Name for the file format (defaults to csv_format_<env>)"
+  description = "Name for the file format (defaults to csv_format)"
   type        = string
   default     = ""
 }
 
 # Locals for effective naming
 locals {
-  effective_stage_name       = "MY_S3_STAGE_${upper(var.environment)}"
-  effective_table_name       = var.table_name != "" ? var.table_name : "raw_data_table_${var.environment}"
-  effective_pipe_name        = var.pipe_name != "" ? var.pipe_name : "s3_pipe_${var.environment}"
-  effective_file_format_name = var.file_format_name != "" ? var.file_format_name : "csv_format_${var.environment}"
+  effective_stage_name       = "S3_STAGE"
+  effective_table_name       = var.table_name != "" ? var.table_name : "RAW_DATA_TABLE"
+  effective_pipe_name        = var.pipe_name != "" ? var.pipe_name : "S3_PIPE"
+  effective_file_format_name = var.file_format_name != "" ? var.file_format_name : "CSV_FORMAT"
 }

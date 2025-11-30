@@ -115,7 +115,7 @@ resource "snowflake_pipe" "s3_pipe" {
         METADATA$FILENAME,
         METADATA$FILE_ROW_NUMBER,
         CURRENT_TIMESTAMP
-      FROM @"${data.snowflake_database.snowpipe_db.name}"."${local.schema_name}".MY_S3_STAGE_${upper(var.environment)}
+      FROM @"${data.snowflake_database.snowpipe_db.name}"."${local.schema_name}"."${snowflake_stage.stage_tf_integration.name}"
     )
     FILE_FORMAT = (FORMAT_NAME = '"${data.snowflake_database.snowpipe_db.name}"."${local.schema_name}"."${snowflake_file_format.csv_format.name}"')
     ON_ERROR = 'CONTINUE'
