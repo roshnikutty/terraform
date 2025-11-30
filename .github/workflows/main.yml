@@ -66,17 +66,18 @@ jobs:
         run: |
           echo "Importing existing resources into Terraform state..."
 
-          # Import Snowflake resources (ignore errors if already imported)
-          terraform import -var-file="dev.tfvars" 'snowflake_file_format.csv_format' '"ROSHNI_DB"."INGEST_SCHEMA"."CSV_FORMAT"' || true
-          terraform import -var-file="dev.tfvars" 'snowflake_table.raw_data_table' '"ROSHNI_DB"."INGEST_SCHEMA"."RAW_DATA_TABLE"' || true
-          terraform import -var-file="dev.tfvars" 'snowflake_storage_integration.s3_integration' 'my_s3_integration_dev' || true
-          terraform import -var-file="dev.tfvars" 'snowflake_stage.stage_tf_integration' '"ROSHNI_DB"."INGEST_SCHEMA"."S3_STAGE"' || true
-          terraform import -var-file="dev.tfvars" 'snowflake_pipe.s3_pipe' '"ROSHNI_DB"."INGEST_SCHEMA"."S3_PIPE"' || true
+          # Only import resources that don't crash the provider
+          echo "Importing storage integration..."
+          terraform import -var-file="dev.tfvars" 'snowflake_storage_integration.s3_integration' 'my_s3_integration_dev' || echo "Failed to import storage integration (may not exist or already in state)"
 
-          # Import AWS resources (ignore errors if already imported)
-          terraform import -var-file="dev.tfvars" 'aws_iam_role_policy.snowflake_ingest_policy' 'snowflake-snowpipe-role-dev:snowflake-snowpipe-policy' || true
+          echo "Importing IAM role policy..."
+          terraform import -var-file="dev.tfvars" 'aws_iam_role_policy.snowflake_ingest_policy' 'snowflake-snowpipe-role-dev:snowflake-snowpipe-policy' || echo "Failed to import IAM policy (may not exist or already in state)"
 
-          echo "Import complete (errors ignored if resources already in state)"
+          # Note: file_format, table, stage, and pipe cannot be imported due to Snowflake provider bugs
+          # These will need to be manually deleted in Snowflake and recreated by Terraform,
+          # or the lifecycle blocks will prevent Terraform from modifying them after first apply
+
+          echo "Import step complete"
 
       - name: Terraform Plan
         id: plan
