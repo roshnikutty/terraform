@@ -53,6 +53,24 @@ jobs:
           echo "Running terraform validate"
           terraform validate
 
+      - name: Import existing resources
+        id: import
+        continue-on-error: true
+        run: |
+          echo "Importing existing resources into Terraform state..."
+
+          # Import Snowflake resources (ignore errors if already imported)
+          terraform import 'snowflake_file_format.csv_format' '"ROSHNI_DB"."INGEST_SCHEMA"."CSV_FORMAT"' || true
+          terraform import 'snowflake_table.raw_data_table' '"ROSHNI_DB"."INGEST_SCHEMA"."RAW_DATA_TABLE"' || true
+          terraform import 'snowflake_storage_integration.s3_integration' 'my_s3_integration_dev' || true
+          terraform import 'snowflake_stage.stage_tf_integration' '"ROSHNI_DB"."INGEST_SCHEMA"."S3_STAGE"' || true
+          terraform import 'snowflake_pipe.s3_pipe' '"ROSHNI_DB"."INGEST_SCHEMA"."S3_PIPE"' || true
+
+          # Import AWS resources (ignore errors if already imported)
+          terraform import 'aws_iam_role_policy.snowflake_ingest_policy' 'snowflake-snowpipe-role-dev:snowflake-snowpipe-policy' || true
+
+          echo "Import complete (errors ignored if resources already in state)"
+
       - name: Terraform Plan
         id: plan
         run: |
@@ -66,6 +84,12 @@ jobs:
         with:
           name: tfplan
           path: tfplan
+
+      - name: upload Terraform state
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-state
+          path: terraform.tfstate
   
   apply:
     name: Terraform Apply
@@ -98,29 +122,17 @@ jobs:
           echo "Running terraform init"
           terraform init
 
+      - name: download Terraform state
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-state
+          path: .
+
       - name: download Terraform plan artifact
         uses: actions/download-artifact@v4
         with:
           name: tfplan
           path: .
-
-      - name: Import existing resources
-        id: import
-        continue-on-error: true
-        run: |
-          echo "Importing existing resources into Terraform state..."
-
-          # Import Snowflake resources (ignore errors if already imported)
-          terraform import 'snowflake_file_format.csv_format' '"ROSHNI_DB"."INGEST_SCHEMA"."CSV_FORMAT"' || true
-          terraform import 'snowflake_table.raw_data_table' '"ROSHNI_DB"."INGEST_SCHEMA"."RAW_DATA_TABLE"' || true
-          terraform import 'snowflake_storage_integration.s3_integration' 'my_s3_integration_dev' || true
-          terraform import 'snowflake_stage.stage_tf_integration' '"ROSHNI_DB"."INGEST_SCHEMA"."S3_STAGE"' || true
-          terraform import 'snowflake_pipe.s3_pipe' '"ROSHNI_DB"."INGEST_SCHEMA"."S3_PIPE"' || true
-
-          # Import AWS resources (ignore errors if already imported)
-          terraform import 'aws_iam_role_policy.snowflake_ingest_policy' 'snowflake-snowpipe-role-dev:snowflake-snowpipe-policy' || true
-
-          echo "Import complete (errors ignored if resources already in state)"
 
       - name: Terraform Apply
         id: apply
