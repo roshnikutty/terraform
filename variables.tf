@@ -66,7 +66,6 @@ variable "database" {
 variable "schema" {
   description = "Snowflake schema name"
   type        = string
-  default     = "ingest"
 }
 
 variable "snowflake_aws_account_id" {

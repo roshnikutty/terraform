@@ -11,8 +11,8 @@
 # 1. Verify `var.snowflake_aws_account_id` is correct for your region (DESC STORAGE INTEGRATION doc).
 # 2. Uncomment all resources in this file and apply.
 # 3. In snowpipe.tf:
-# - Comment out the access key stage (snowflake_stage.circana_stage_tf)
-# - Update pipe's copy_statement to reference snowflake_stage.circana_stage_tf_integration
+# - Comment out the access key stage (snowflake_stage.stage_tf)
+# - Update pipe's copy_statement to reference snowflake_stage.stage_tf_integration
 # - Set `auto_ingest = true` on the pipe
 # 4. Manual step - Configure S3 bucket event notifications to Snowflake SQS (get ARN from DESC PIPE).
 # 5. Remove/rotate AWS access key credentials from variables.
@@ -26,16 +26,34 @@ data "snowflake_database" "snowpipe_db" {
   name = var.database
 }
 
+# Check if schema exists by listing all schemas in the database
+data "snowflake_schemas" "all_schemas" {
+  in {
+    database = data.snowflake_database.snowpipe_db.name
+  }
+}
+
+locals {
+  # Check if the schema exists in the list
+  schema_exists = contains([for s in data.snowflake_schemas.all_schemas.schemas : s.show_output[0].name], upper(var.schema))
+}
+
 resource "snowflake_schema" "ingest_schema" {
+  count = local.schema_exists ? 0 : 1
+
   database = data.snowflake_database.snowpipe_db.name
   name     = upper(var.schema)
   comment  = "Terraform managed schema for Snowpipe ingestion"
 }
 
+locals {
+  schema_name = upper(var.schema)
+}
+
 
 resource "snowflake_file_format" "csv_format" {
   database = data.snowflake_database.snowpipe_db.name
-  schema   = snowflake_schema.ingest_schema.name
+  schema   = local.schema_name
   name     = local.effective_file_format_name
 
   format_type = "CSV"
@@ -50,7 +68,7 @@ resource "snowflake_file_format" "csv_format" {
 
 resource "snowflake_table" "raw_data_table" {
   database = data.snowflake_database.snowpipe_db.name
-  schema   = snowflake_schema.ingest_schema.name
+  schema   = local.schema_name
   name     = local.effective_table_name
   comment  = "Raw ingested S3 lines with basic metadata"
 
@@ -79,53 +97,79 @@ resource "snowflake_table" "raw_data_table" {
 resource "snowflake_pipe" "s3_pipe" {
   name     = local.effective_pipe_name
   database = data.snowflake_database.snowpipe_db.name
-  schema   = snowflake_schema.ingest_schema.name
+  schema   = local.schema_name
 
   copy_statement = <<-SQL
-    COPY INTO ${data.snowflake_database.snowpipe_db.name}.${snowflake_schema.ingest_schema.name}.${snowflake_table.raw_data_table.name} (RAW_LINE, FILE_NAME, ROW_NUMBER, INGESTED_AT)
+    COPY INTO "${data.snowflake_database.snowpipe_db.name}"."${local.schema_name}"."${snowflake_table.raw_data_table.name}" (RAW_LINE, FILE_NAME, ROW_NUMBER, INGESTED_AT)
     FROM (
       SELECT
         $1,
         METADATA$FILENAME,
         METADATA$FILE_ROW_NUMBER,
         CURRENT_TIMESTAMP
-      FROM @${data.snowflake_database.snowpipe_db.name}.${snowflake_schema.ingest_schema.name}.MY_S3_STAGE_${upper(var.environment)}
+      FROM @"${data.snowflake_database.snowpipe_db.name}"."${local.schema_name}".MY_S3_STAGE_${upper(var.environment)}
     )
-    FILE_FORMAT = (FORMAT_NAME = '${data.snowflake_database.snowpipe_db.name}.${snowflake_schema.ingest_schema.name}.${snowflake_file_format.csv_format.name}')
+    FILE_FORMAT = (FORMAT_NAME = '"${data.snowflake_database.snowpipe_db.name}"."${local.schema_name}"."${snowflake_file_format.csv_format.name}"')
     ON_ERROR = 'CONTINUE'
   SQL
 
   auto_ingest = true
-  depends_on  = [snowflake_table.raw_data_table, snowflake_file_format.csv_format, snowflake_stage.circana_stage_tf_integration]
+  depends_on  = [snowflake_table.raw_data_table, snowflake_file_format.csv_format, snowflake_stage.stage_tf_integration]
 }
 
 
 resource "aws_iam_role" "snowflake_ingest_role" {
   name = "snowflake-snowpipe-role-${var.environment}"
 
-  # Basic trust policy - allows Snowflake to assume this role
-  # This will be updated by aws_iam_role_policy_attachment after storage integration is created
+  # Initial placeholder trust policy - will be updated by aws_iam_role_policy_attachment below
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Effect    = "Allow",
-        Principal = { AWS = "arn:aws:iam::${var.snowflake_aws_account_id}:root" },
-        Action    = "sts:AssumeRole"
+        Effect = "Allow",
+        Principal = {
+          Service = "s3.amazonaws.com"
+        },
+        Action = "sts:AssumeRole"
       }
     ]
   })
 
-  tags = {
-    Environment = var.environment
-    Purpose     = "Snowflake Snowpipe Auto-Ingest"
-  }
-
-  # Ignore changes to assume_role_policy after initial creation
-  # It will be managed by the null_resource below
   lifecycle {
     ignore_changes = [assume_role_policy]
   }
+}
+
+# Update the IAM role trust policy after storage integration is created
+resource "null_resource" "update_trust_policy" {
+  triggers = {
+    integration_arn = snowflake_storage_integration.s3_integration.storage_aws_iam_user_arn
+    role_name       = aws_iam_role.snowflake_ingest_role.name
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      AWS_ACCESS_KEY_ID=${var.aws_access_key} AWS_SECRET_ACCESS_KEY=${var.aws_secret_key} \
+      aws iam update-assume-role-policy \
+        --role-name ${aws_iam_role.snowflake_ingest_role.name} \
+        --region us-east-1 \
+        --policy-document '{
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Effect": "Allow",
+            "Principal": {
+              "AWS": "${snowflake_storage_integration.s3_integration.storage_aws_iam_user_arn}"
+            },
+            "Action": "sts:AssumeRole"
+          }]
+        }'
+    EOT
+  }
+
+  depends_on = [
+    aws_iam_role.snowflake_ingest_role,
+    snowflake_storage_integration.s3_integration
+  ]
 }
 
 # IAM Policy granting S3 read permissions
@@ -162,50 +206,52 @@ resource "snowflake_storage_integration" "s3_integration" {
 }
 
 # Update IAM role trust policy with Snowflake-generated values
-resource "null_resource" "update_iam_trust_policy" {
-  count = var.enable_storage_integration ? 1 : 0
-
-  triggers = {
-    storage_integration_id = snowflake_storage_integration.s3_integration.id
-    iam_role_name          = aws_iam_role.snowflake_ingest_role.name
-  }
-
-  provisioner "local-exec" {
-    command = <<-EOT
-      aws iam update-assume-role-policy \
-        --role-name ${aws_iam_role.snowflake_ingest_role.name} \
-        --policy-document '{
-          "Version": "2012-10-17",
-          "Statement": [{
-            "Effect": "Allow",
-            "Principal": {
-              "AWS": "${snowflake_storage_integration.s3_integration.storage_aws_iam_user_arn}"
-            },
-            "Action": "sts:AssumeRole",
-            "Condition": {
-              "StringEquals": {
-                "sts:ExternalId": "${snowflake_storage_integration.s3_integration.storage_aws_external_id}"
-              }
-            }
-          }]
-        }'
-    EOT
-  }
-
-  depends_on = [snowflake_storage_integration.s3_integration]
-}
+# NOTE: You need to manually update the IAM role trust policy after apply
+# Run: DESC STORAGE INTEGRATION my_s3_integration_dev; in Snowflake
+# Then manually update the IAM role trust policy with the returned values
+# resource "null_resource" "update_iam_trust_policy" {
+#   count = var.enable_storage_integration ? 1 : 0
+#
+#   triggers = {
+#     storage_integration_id = snowflake_storage_integration.s3_integration.id
+#     iam_role_name          = aws_iam_role.snowflake_ingest_role.name
+#   }
+#
+#   provisioner "local-exec" {
+#     command = <<-EOT
+#       aws iam update-assume-role-policy \
+#         --role-name ${aws_iam_role.snowflake_ingest_role.name} \
+#         --policy-document '{
+#           "Version": "2012-10-17",
+#           "Statement": [{
+#             "Effect": "Allow",
+#             "Principal": {
+#               "AWS": "${snowflake_storage_integration.s3_integration.storage_aws_iam_user_arn}"
+#             },
+#             "Action": "sts:AssumeRole",
+#             "Condition": {
+#               "StringEquals": {
+#                 "sts:ExternalId": "${snowflake_storage_integration.s3_integration.storage_aws_external_id}"
+#               }
+#             }
+#           }]
+#         }'
+#     EOT
+#   }
+#
+#   depends_on = [snowflake_storage_integration.s3_integration]
+# }
 
 # Alternative Stage using Storage Integration (replaces access key stage)
 
 
-resource "snowflake_stage" "circana_stage_tf_integration" {
+resource "snowflake_stage" "stage_tf_integration" {
   name                = local.effective_stage_name
   url                 = "s3://${var.s3_bucket_name}/${var.s3_prefix}"
   database            = data.snowflake_database.snowpipe_db.name
-  schema              = snowflake_schema.ingest_schema.name
+  schema              = local.schema_name
   storage_integration = snowflake_storage_integration.s3_integration.name
   comment             = "Stage using storage integration (preferred for auto-ingest)"
 
-  depends_on = [snowflake_schema.ingest_schema,
-  snowflake_storage_integration.s3_integration]
+  depends_on = [snowflake_storage_integration.s3_integration]
 }

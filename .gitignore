@@ -3,8 +3,10 @@
 .terraform.lock.hcl
 *.tfstate
 *.tfstate.backup
-terraform.tfvars
 *.tfvars.json
+*.lock.info
+terraform.tfvars
+tfplan
 
 # Sensitive files
 .env

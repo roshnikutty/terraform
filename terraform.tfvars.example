@@ -1,5 +1,10 @@
 # Example terraform.tfvars file
 # Copy this to terraform.tfvars and fill in your actual values
 
-aws_access_key = "placeholder"
-aws_secret_key = "placeholder"
+aws_access_key              = "placeholder"
+aws_secret_key              = "placeholder"
+database                    = "placeholder"
+snowflake_account_name      = "placeholder"
+snowflake_organization_name = "placeholder"
+snowflake_user              = "placeholder"
+snowflake_password          = "placeholder"
