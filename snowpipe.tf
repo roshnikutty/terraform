@@ -63,6 +63,10 @@ resource "snowflake_file_format" "csv_format" {
   null_if             = ["\\N"]
   empty_field_as_null = true
   trim_space          = true
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 
@@ -91,6 +95,10 @@ resource "snowflake_table" "raw_data_table" {
       expression = "CURRENT_TIMESTAMP"
     }
   }
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # Pipe (auto-ingest enabled with storage integration)
@@ -115,6 +123,10 @@ resource "snowflake_pipe" "s3_pipe" {
 
   auto_ingest = true
   depends_on  = [snowflake_table.raw_data_table, snowflake_file_format.csv_format, snowflake_stage.stage_tf_integration]
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 
@@ -203,6 +215,10 @@ resource "snowflake_storage_integration" "s3_integration" {
   comment                   = "Storage integration for Snowpipe auto-ingest from S3"
 
   depends_on = [aws_iam_role.snowflake_ingest_role]
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # Update IAM role trust policy with Snowflake-generated values
@@ -254,4 +270,8 @@ resource "snowflake_stage" "stage_tf_integration" {
   comment             = "Stage using storage integration (preferred for auto-ingest)"
 
   depends_on = [snowflake_storage_integration.s3_integration]
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
