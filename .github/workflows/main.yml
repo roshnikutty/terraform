@@ -16,6 +16,7 @@ env:
   TF_VAR_snowflake_account_name: ${{ secrets.SNOWFLAKE_ACCOUNT_NAME }}
   TF_VAR_snowflake_role: ${{ secrets.SNOWFLAKE_ROLE }}
   TF_VAR_database: ${{ vars.DATABASE }}
+  TF_VAR_schema: ${{ vars.SCHEMA }}
   #AWS creds with IAM pernmissions to create roles/policies
   TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
   TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -77,6 +78,7 @@ jobs:
       TF_VAR_snowflake_account_name: ${{ secrets.SNOWFLAKE_ACCOUNT_NAME }}
       TF_VAR_snowflake_role: ${{ secrets.SNOWFLAKE_ROLE }}
       TF_VAR_database: ${{ vars.DATABASE }}
+      TF_VAR_schema: ${{ vars.SCHEMA }}
       #AWS creds with IAM pernmissions to create roles/policies
       TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
       TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
