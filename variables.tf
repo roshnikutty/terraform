@@ -80,12 +80,6 @@ variable "enable_storage_integration" {
   default     = true
 }
 
-variable "create_iam_role" {
-  description = "Whether to create a new IAM role. Set to false if the role already exists."
-  type        = bool
-  default     = true
-}
-
 # Optional: Resource Name Overrides
 variable "table_name" {
   description = "Name for the Snowflake table (defaults to raw_data_table_<env>)"

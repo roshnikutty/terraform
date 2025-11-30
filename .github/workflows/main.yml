@@ -66,12 +66,16 @@ jobs:
         run: |
           echo "Importing existing resources into Terraform state..."
 
-          # Only import resources that don't crash the provider
-          echo "Importing storage integration..."
-          terraform import -var-file="dev.tfvars" 'snowflake_storage_integration.s3_integration' 'my_s3_integration_dev' || echo "Failed to import storage integration (may not exist or already in state)"
+          # Import AWS IAM resources (ignore errors if don't exist or already in state)
+          echo "Importing IAM role..."
+          terraform import -var-file="dev.tfvars" 'aws_iam_role.snowflake_ingest_role' 'snowflake-snowpipe-role-dev' || echo "Failed to import IAM role (may not exist or already in state)"
 
           echo "Importing IAM role policy..."
           terraform import -var-file="dev.tfvars" 'aws_iam_role_policy.snowflake_ingest_policy' 'snowflake-snowpipe-role-dev:snowflake-snowpipe-policy' || echo "Failed to import IAM policy (may not exist or already in state)"
+
+          # Import Snowflake resources
+          echo "Importing storage integration..."
+          terraform import -var-file="dev.tfvars" 'snowflake_storage_integration.s3_integration' 'my_s3_integration_dev' || echo "Failed to import storage integration (may not exist or already in state)"
 
           # Note: file_format, table, stage, and pipe cannot be imported due to Snowflake provider bugs
           # These will need to be manually deleted in Snowflake and recreated by Terraform,
