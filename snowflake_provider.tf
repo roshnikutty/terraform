@@ -4,6 +4,14 @@ terraform {
       source  = "snowflakedb/snowflake"
       version = ">= 1.0.0"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = ">= 3.0.0"
+    }
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 4.0.0"
+    }
   }
 }
 
@@ -13,27 +21,4 @@ provider "snowflake" {
   user              = var.snowflake_user
   password          = var.snowflake_password
   role              = var.snowflake_role
-}
-
-
-variable "snowflake_password" {
-  type      = string
-  sensitive = true
-}
-
-variable "snowflake_user" {
-  type = string
-}
-
-variable "snowflake_account_name" {
-  type = string
-}
-
-variable "snowflake_organization_name" {
-  type = string
-}
-
-variable "snowflake_role" {
-  type    = string
-  default = "ACCOUNTADMIN"
 }
