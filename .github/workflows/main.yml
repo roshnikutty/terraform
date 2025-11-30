@@ -38,21 +38,18 @@ jobs:
         run: |
           echo "Running terraform fmt"
           terraform fmt -check -recursive
-        working-directory: ./terraform
 
       - name: Terraform Init
         id: init
         run: |
           echo "Running terraform init"
           terraform init
-        working-directory: ./terraform
 
       - name: Terraform validate
         id: validate
         run: |
           echo "Running terraform validate"
           terraform validate
-        working-directory: ./terraform
 
       - name: Terraform Plan
         id: plan
@@ -61,13 +58,12 @@ jobs:
           terraform plan -var-file="dev.tfvars" -out=tfplan
           echo "Terraform plan summary:"
           terraform show -no-color tfplan | sed 's/\(private_key\|aws_key_id\|aws_secret_key\|password\|secret\|token\)[[:space:]]*=[[:space:]]*".*"/\1 = "***REDACTED***"/g'
-        working-directory: ./terraform
 
       - name: upload Terraform plan artifact
         uses: actions/upload-artifact@v4
         with:
           name: tfplan
-          path: ./terraform/tfplan
+          path: tfplan
   
   apply:
     name: Terraform Apply
@@ -97,17 +93,15 @@ jobs:
         run: |
           echo "Running terraform init"
           terraform init
-        working-directory: ./terraform
 
       - name: download Terraform plan artifact
         uses: actions/download-artifact@v4
         with:
           name: tfplan
-          path: ./terraform
+          path: .
 
       - name: Terraform Apply
         id: apply
         run: |
           echo "Running terraform apply"
           terraform apply -auto-approve tfplan
-        working-directory: ./terraform
